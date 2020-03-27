@@ -2,7 +2,7 @@
 
   <arg name="robot" default="fla"/>
   <arg name="calibration_file"
-    default="$(find msckf_vio)/config/camchain-imucam-fla.yaml"/>
+    default="$(find calibrations)/camchain-imucam-sim.yaml"/>
 
   <!-- Image Processor Nodelet  -->
   <group ns="$(arg robot)">
@@ -23,9 +23,9 @@
       <param name="ransac_threshold" value="3"/>
       <param name="stereo_threshold" value="5"/>
 
-      <remap from="~imu" to="sync/imu/imu"/>
-      <remap from="~cam0_image" to="sync/cam0/image_raw"/>
-      <remap from="~cam1_image" to="sync/cam1/image_raw"/>
+      <remap from="~imu" to="/interpolate_imu/imu"/>
+      <remap from="~cam0_image" to="/realsense/infra1/image_rect_raw"/>
+      <remap from="~cam1_image" to="/realsense/infra2/image_rect_raw"/>
 
     </node>
   </group>

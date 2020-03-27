@@ -19,7 +19,9 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
 #include <std_srvs/Trigger.h>
 
 #include "imu_state.h"
@@ -107,7 +109,7 @@ class MsckfVio {
      * @brief publish Publish the results of VIO.
      * @param time The time stamp of output msgs.
      */
-    void publish(const ros::Time& time);
+    void publish(const ros::Time& time, int seq);
 
     /*
      * @brief initializegravityAndBias
@@ -209,8 +211,15 @@ class MsckfVio {
     ros::Subscriber feature_sub;
     ros::Publisher odom_pub;
     ros::Publisher feature_pub;
+    ros::Publisher pose_history_pub;
+    ros::Publisher pose_pub;
+    ros::Publisher twist_pub;
     tf::TransformBroadcaster tf_pub;
+    tf::TransformListener listener;
     ros::ServiceServer reset_srv;
+
+    // Pose history
+    nav_msgs::Path pose_history;
 
     // Frame id
     std::string fixed_frame_id;
@@ -223,6 +232,10 @@ class MsckfVio {
     // only used to determine the timing threshold of
     // each iteration of the filter.
     double frame_rate;
+    uint64_t pose_count = 0;
+    uint64_t history_max_size = 30;
+    uint64_t history_decimate = 30;
+
 
     // Debugging variables and functions
     void mocapOdomCallback(
@@ -231,6 +244,7 @@ class MsckfVio {
     ros::Subscriber mocap_odom_sub;
     ros::Publisher mocap_odom_pub;
     geometry_msgs::TransformStamped raw_mocap_odom_msg;
+    tf::StampedTransform odom_nav_to_world;
     Eigen::Isometry3d mocap_initial_frame;
 };
 

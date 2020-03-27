@@ -178,6 +178,11 @@ bool MsckfVio::loadParameters() {
 
 bool MsckfVio::createRosIO() {
   odom_pub = nh.advertise<nav_msgs::Odometry>("odom", 10);
+
+  pose_history_pub = nh.advertise<nav_msgs::Path>("pose_history", 10);
+  pose_pub = nh.advertise<geometry_msgs::PoseStamped>("pose", 10);
+  twist_pub = nh.advertise<geometry_msgs::TwistStamped>("twist", 10);
+
   feature_pub = nh.advertise<sensor_msgs::PointCloud2>(
       "feature_point_cloud", 10);
 
@@ -222,6 +227,16 @@ bool MsckfVio::initialize() {
 
   if (!createRosIO()) return false;
   ROS_INFO("Finish creating ROS IO...");
+
+  try {
+    listener.waitForTransform(fixed_frame_id, "odom_nav", ros::Time::now(), ros::Duration(2.0));
+    listener.lookupTransform(fixed_frame_id, "odom_nav", ros::Time::now(), odom_nav_to_world);
+  } catch (tf::TransformException &ex) {
+    ROS_ERROR("%s", ex.what());
+    std::cout << "WARNING: Could not find transform from odom_nav to "
+              << fixed_frame_id << ". Using identity." << std::endl;
+    odom_nav_to_world.setIdentity();
+  }
 
   return true;
 }
@@ -408,7 +423,7 @@ void MsckfVio::featureCallback(
 
   // Publish the odometry.
   start_time = ros::Time::now();
-  publish(msg->header.stamp);
+  publish(msg->header.stamp, msg->header.seq);
   double publish_time = (
       ros::Time::now()-start_time).toSec();
 
@@ -499,7 +514,7 @@ void MsckfVio::mocapOdomCallback(
 
   tf::poseEigenToMsg(T_b_w_gt, mocap_odom_msg.pose.pose);
   //tf::vectorEigenToMsg(body_velocity_gt,
-  //    mocap_odom_msg.twist.twist.linear);
+  //mocap_odom_msg.twist.twist.linear);
 
   mocap_odom_pub.publish(mocap_odom_msg);
   return;
@@ -1160,9 +1175,8 @@ void MsckfVio::findRedundantCamStates(
     double angle = AngleAxisd(
         rotation*key_rotation.transpose()).angle();
 
-    if (angle < rotation_threshold &&
-        distance < translation_threshold &&
-        tracking_rate > tracking_rate_threshold) {
+    //if (angle < 0.1745 && distance < 0.2 && tracking_rate > 0.5) {
+    if (angle < 0.2618 && distance < 0.4 && tracking_rate > 0.5) {
       rm_cam_state_ids.push_back(cam_state_iter->first);
       ++cam_state_iter;
     } else {
@@ -1363,8 +1377,7 @@ void MsckfVio::onlineReset() {
   return;
 }
 
-void MsckfVio::publish(const ros::Time& time) {
-
+void MsckfVio::publish(const ros::Time& time, int seq) {
   // Convert the IMU frame to the body frame.
   const IMUState& imu_state = state_server.imu_state;
   Eigen::Isometry3d T_i_w = Eigen::Isometry3d::Identity();
@@ -1378,49 +1391,87 @@ void MsckfVio::publish(const ros::Time& time) {
     IMUState::T_imu_body.linear() * imu_state.velocity;
 
   // Publish tf
+  tf::StampedTransform body_to_world_stamped;
+  tf::Transform body_to_odom_nav;
+  tf::transformEigenToTF(T_b_w, body_to_odom_nav);
+  auto body_to_world = odom_nav_to_world * body_to_odom_nav;
+  body_to_world_stamped = tf::StampedTransform(body_to_world, time, fixed_frame_id, child_frame_id);
+
   if (publish_tf) {
-    tf::Transform T_b_w_tf;
-    tf::transformEigenToTF(T_b_w, T_b_w_tf);
-    tf_pub.sendTransform(tf::StampedTransform(
-          T_b_w_tf, time, fixed_frame_id, child_frame_id));
+    tf_pub.sendTransform(body_to_world_stamped);
   }
 
-  // Publish the odometry
-  nav_msgs::Odometry odom_msg;
-  odom_msg.header.stamp = time;
-  odom_msg.header.frame_id = fixed_frame_id;
-  odom_msg.child_frame_id = child_frame_id;
+  // // Publish the odometry
+  // nav_msgs::Odometry odom_msg;
+  // odom_msg.header.stamp = time;
+  // odom_msg.header.frame_id = fixed_frame_id;
+  // odom_msg.child_frame_id = child_frame_id;
 
-  tf::poseEigenToMsg(T_b_w, odom_msg.pose.pose);
-  tf::vectorEigenToMsg(body_velocity, odom_msg.twist.twist.linear);
+  // tf::poseEigenToMsg(T_b_w, odom_msg.pose.pose);
+  // tf::vectorEigenToMsg(body_velocity, odom_msg.twist.twist.linear);
 
-  // Convert the covariance.
-  Matrix3d P_oo = state_server.state_cov.block<3, 3>(0, 0);
-  Matrix3d P_op = state_server.state_cov.block<3, 3>(0, 12);
-  Matrix3d P_po = state_server.state_cov.block<3, 3>(12, 0);
-  Matrix3d P_pp = state_server.state_cov.block<3, 3>(12, 12);
-  Matrix<double, 6, 6> P_imu_pose = Matrix<double, 6, 6>::Zero();
-  P_imu_pose << P_pp, P_po, P_op, P_oo;
+  // // Convert the covariance.
+  // Matrix3d P_oo = state_server.state_cov.block<3, 3>(0, 0);
+  // Matrix3d P_op = state_server.state_cov.block<3, 3>(0, 12);
+  // Matrix3d P_po = state_server.state_cov.block<3, 3>(12, 0);
+  // Matrix3d P_pp = state_server.state_cov.block<3, 3>(12, 12);
+  // Matrix<double, 6, 6> P_imu_pose = Matrix<double, 6, 6>::Zero();
+  // P_imu_pose << P_pp, P_po, P_op, P_oo;
 
-  Matrix<double, 6, 6> H_pose = Matrix<double, 6, 6>::Zero();
-  H_pose.block<3, 3>(0, 0) = IMUState::T_imu_body.linear();
-  H_pose.block<3, 3>(3, 3) = IMUState::T_imu_body.linear();
-  Matrix<double, 6, 6> P_body_pose = H_pose *
-    P_imu_pose * H_pose.transpose();
+  // Matrix<double, 6, 6> H_pose = Matrix<double, 6, 6>::Zero();
+  // H_pose.block<3, 3>(0, 0) = IMUState::T_imu_body.linear();
+  // H_pose.block<3, 3>(3, 3) = IMUState::T_imu_body.linear();
+  // Matrix<double, 6, 6> P_body_pose = H_pose *
+  //   P_imu_pose * H_pose.transpose();
 
-  for (int i = 0; i < 6; ++i)
-    for (int j = 0; j < 6; ++j)
-      odom_msg.pose.covariance[6*i+j] = P_body_pose(i, j);
+  // for (int i = 0; i < 6; ++i)
+  //   for (int j = 0; j < 6; ++j)
+  //     odom_msg.pose.covariance[6*i+j] = P_body_pose(i, j);
 
-  // Construct the covariance for the velocity.
-  Matrix3d P_imu_vel = state_server.state_cov.block<3, 3>(6, 6);
-  Matrix3d H_vel = IMUState::T_imu_body.linear();
-  Matrix3d P_body_vel = H_vel * P_imu_vel * H_vel.transpose();
-  for (int i = 0; i < 3; ++i)
-    for (int j = 0; j < 3; ++j)
-      odom_msg.twist.covariance[i*6+j] = P_body_vel(i, j);
+  // // Construct the covariance for the velocity.
+  // Matrix3d P_imu_vel = state_server.state_cov.block<3, 3>(6, 6);
+  // Matrix3d H_vel = IMUState::T_imu_body.linear();
+  // Matrix3d P_body_vel = H_vel * P_imu_vel * H_vel.transpose();
+  // for (int i = 0; i < 3; ++i)
+  //   for (int j = 0; j < 3; ++j)
+  //     odom_msg.twist.covariance[i*6+j] = P_body_vel(i, j);
+  // odom_pub.publish(odom_msg);
 
-  odom_pub.publish(odom_msg);
+  // Publish pose
+  geometry_msgs::PoseStamped pose_msg;
+  pose_msg.header.seq = seq;
+  pose_msg.header.stamp = time;
+  pose_msg.header.frame_id = fixed_frame_id;
+
+  Eigen::Isometry3d body_to_world_eigen, odom_nav_to_world_eigen;
+  tf::transformTFToEigen(odom_nav_to_world, odom_nav_to_world_eigen);
+  tf::transformTFToEigen(body_to_world, body_to_world_eigen);
+  tf::poseEigenToMsg(body_to_world_eigen, pose_msg.pose);
+
+  pose_pub.publish(pose_msg);
+
+  pose_history.header.stamp = ros::Time::now();
+  pose_history.header.frame_id = fixed_frame_id;
+
+  if(pose_count % 3 == 0) {
+    pose_history.poses.push_back(pose_msg);
+    if (pose_history.poses.size() > history_max_size) {
+      pose_history.poses.erase(pose_history.poses.begin());
+    }
+  }
+
+  if(pose_history.poses.size() == history_max_size
+     && (pose_count % history_decimate) == 0) {
+    pose_history_pub.publish(pose_history);
+  }
+
+  // Publish twist
+  geometry_msgs::TwistStamped twist_msg;
+  twist_msg.header.stamp = time;
+  twist_msg.header.frame_id = fixed_frame_id;
+  Eigen::Vector3d world_velocity = odom_nav_to_world_eigen.linear() * body_velocity;
+  tf::vectorEigenToMsg(world_velocity, twist_msg.twist.linear);
+  twist_pub.publish(twist_msg);
 
   // Publish the 3D positions of the features that
   // has been initialized.

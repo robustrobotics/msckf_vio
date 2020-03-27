@@ -220,7 +220,7 @@ void Feature::jacobian(const Eigen::Isometry3d& T_c0_ci,
   if (e <= optimization_config.huber_epsilon)
     w = 1.0;
   else
-    w = std::sqrt(2.0*optimization_config.huber_epsilon / e);
+    w = optimization_config.huber_epsilon / (2*e);
 
   return;
 }

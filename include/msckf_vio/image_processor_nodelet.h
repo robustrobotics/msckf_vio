@@ -14,10 +14,6 @@
 
 namespace msckf_vio {
 class ImageProcessorNodelet : public nodelet::Nodelet {
-public:
-  ImageProcessorNodelet() { return; }
-  ~ImageProcessorNodelet() { return; }
-
 private:
   virtual void onInit();
   ImageProcessorPtr img_processor_ptr;

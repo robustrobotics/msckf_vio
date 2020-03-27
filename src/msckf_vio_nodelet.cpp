@@ -17,8 +17,7 @@ void MsckfVioNodelet::onInit() {
   return;
 }
 
-PLUGINLIB_EXPORT_CLASS(msckf_vio::MsckfVioNodelet,
-    nodelet::Nodelet);
+PLUGINLIB_EXPORT_CLASS(msckf_vio::MsckfVioNodelet, nodelet::Nodelet);
 
 } // end namespace msckf_vio
 

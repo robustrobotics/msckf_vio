@@ -34,7 +34,6 @@
 
   <depend>libpcl-all-dev</depend>
   <depend>libpcl-all</depend>
-  <depend>suitesparse</depend>
 
   <test_depend>rosunit</test_depend>
 
