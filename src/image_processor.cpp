@@ -12,6 +12,7 @@
 
 #include <sensor_msgs/image_encodings.h>
 #include <random_numbers/random_numbers.h>
+#include <cv_bridge/cv_bridge.h>
 
 #include <msckf_vio/CameraMeasurement.h>
 #include <msckf_vio/TrackingInfo.h>
@@ -212,11 +213,17 @@ void ImageProcessor::stereoCallback(
 
   //cout << "==================================" << endl;
 
-  // Get the current image.
-  cam0_curr_img_ptr = cv_bridge::toCvShare(cam0_img,
-      sensor_msgs::image_encodings::TYPE_8UC1);
-  cam1_curr_img_ptr = cv_bridge::toCvShare(cam1_img,
-      sensor_msgs::image_encodings::TYPE_8UC1);
+  if(sensor_msgs::image_encodings::isColor(cam0_img->encoding)) {
+    cv_bridge::CvImageConstPtr cam0_cv = cv_bridge::toCvShare(cam0_img,
+                                                              cam0_img->encoding);
+    cv_bridge::CvImageConstPtr cam1_cv = cv_bridge::toCvShare(cam1_img,
+                                                              cam1_img->encoding);
+    cam0_curr_img_ptr = cv_bridge::cvtColor(cam0_cv, sensor_msgs::image_encodings::MONO8);
+    cam1_curr_img_ptr = cv_bridge::cvtColor(cam1_cv, sensor_msgs::image_encodings::MONO8);
+  } else {
+    cam0_curr_img_ptr = cv_bridge::toCvShare(cam0_img, sensor_msgs::image_encodings::MONO8);
+    cam1_curr_img_ptr = cv_bridge::toCvShare(cam1_img, sensor_msgs::image_encodings::MONO8);
+  }
 
   // Build the image pyramids once since they're used at multiple places
   createImagePyramids();
