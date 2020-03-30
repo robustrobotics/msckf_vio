@@ -1,7 +1,9 @@
 <launch>
   <arg name="robot" default="fla"/>
-  <arg name="calibration_file"
-    default="$(find msckf_vio)/calibrations/camchain-imucam-sim.yaml"/>
+  <arg name="calibration_file" default="/calibration.yaml"/>
+  <arg name="left_image_topic" default="/mynteye/left/image_color" />
+  <arg name="right_image_topic" default="/mynteye/right/image_color" />
+  <arg name="imu_topic" default="/mynteye/imu/data_raw" />
 
   <!-- Image Processor Nodelet  -->
   <group ns="$(arg robot)">
@@ -22,9 +24,9 @@
       <param name="ransac_threshold" value="3"/>
       <param name="stereo_threshold" value="5"/>
 
-      <remap from="~imu" to="/mynteye/imu/data_raw"/>
-      <remap from="~cam0_image" to="/stereo_rectify/left/image"/>
-      <remap from="~cam1_image" to="/stereo_rectify/right/image"/>
+      <remap from="~imu" to="$(arg imu_topic)"/>
+      <remap from="~cam0_image" to="$(arg left_image_topic)"/>
+      <remap from="~cam1_image" to="$(arg right_image_topic)"/>
 
     </node>
   </group>

@@ -1,13 +1,18 @@
 <launch>
   <arg name="robot" default="fla"/>
   <arg name="fixed_frame_id" default="world"/>
-  <arg name="calibration_file"
-    default="$(find msckf_vio)/calibrations/camchain-imucam-mynteye-color-equi-rect.yaml"/>
+  <arg name="calibration_file" default="/calibration.yaml"/>
+  <arg name="left_image_topic" default="/mynteye/left/image_color" />
+  <arg name="right_image_topic" default="/mynteye/right/image_color" />
+  <arg name="imu_topic" default="/mynteye/imu/data_raw" />
 
   <!-- Image Processor Nodelet  -->
   <include file="$(find msckf_vio)/launch/image_processor.launch">
     <arg name="robot" value="$(arg robot)"/>
     <arg name="calibration_file" value="$(arg calibration_file)"/>
+    <arg name="left_image_topic" value="$(arg left_image_topic)" />
+    <arg name="right_image_topic" value="$(arg right_image_topic)" />
+    <arg name="imu_topic" value="$(arg imu_topic)" />
   </include>
 
   <!-- Msckf Vio Nodelet  -->
